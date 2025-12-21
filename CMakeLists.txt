@@ -1,4 +1,4 @@
-cmake_minimum_required(VERSION 4.0.1)
+cmake_minimum_required(VERSION 4.0.0)
 project(diddytron VERSION 0.1.0 LANGUAGES C)
 
 set(CMAKE_MACOSX_RPATH ON)
