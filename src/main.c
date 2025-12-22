@@ -4,6 +4,11 @@
 #include<stdbool.h>
 #include<stdlib.h>
 
+#include "common.h"
+#include "cleanupstack.h"
+#include "vulkan/vulkan_core.h" // having this here doesn't hurt and  prevents intellisense from adding it at the top which would break compilation
+
+#define N_IMAGE 3
 
 
 #define VERIFY(o,r) \
@@ -17,8 +22,7 @@ if (!x)
 
 
 
-typedef uint32_t u32;
-typedef uint8_t u8;
+
 
 struct Error {
     const char* origin;
@@ -130,7 +134,12 @@ struct SelectedQueueFamilies {
 	u32 graphicsQF;
 };
 
-bool enumerate_devices(VkInstance instance, VkDevice* device, struct Error* e_out) {
+struct Queues {
+	VkQueue graphics_queue;
+	u32 i_graphics_queue_fam;
+};
+
+bool make_device(VkInstance instance, VkDevice* device, struct Queues* queues, struct Error* e_out) {
 
 	u32 n_dev = 0;
 	VkPhysicalDevice* devs = NULL;
@@ -168,16 +177,17 @@ bool enumerate_devices(VkInstance instance, VkDevice* device, struct Error* e_ou
 	struct SelectedQueueFamilies set_if_found = {};
 
 
-	printf("queue families of selected device:\n");
+	printf("queue families of selected device (%u total):\n", n_qfam);
 	for (u32 i = 0; i < n_qfam; i++) {
-		if (qfams[i].queueFlags | VK_QUEUE_GRAPHICS_BIT) {
+		printf("\tindex %u flags: %x\n",i,qfams[i].queueFlags);
+		if (qfams[i].queueFlags & VK_QUEUE_GRAPHICS_BIT) {
 			sqf.graphicsQF = i;
 			set_if_found.graphicsQF = 1;
 			break;
 		}
 	}
 
-	if (!set_if_found.graphicsQF) {
+	if (!set_if_found.graphicsQF) {
 		printf("NO GRAPHICS QUEUE\n");
 		exit(1);
 	}
@@ -206,24 +216,112 @@ bool enumerate_devices(VkInstance instance, VkDevice* device, struct Error* e_ou
 	VERIFY("device creation", r);
 	printf("created device\n");
 
+
+	vkGetDeviceQueue(*device, sqf.graphicsQF, 0, &queues->graphics_queue);
+	printf("got graphics queue %p\n", queues->graphics_queue);
+	queues->i_graphics_queue_fam = sqf.graphicsQF;
+
 	return false;
 
 }
 
-void cleanup(VkInstance instance, VkDebugUtilsMessengerEXT messenger, VkDevice device) {
-	vkDestroyDevice(device, NULL);
-	vkDestroyDebugUtilsMessengerEXT(instance, messenger, NULL);
-    vkDestroyInstance(instance, NULL);
+bool make_images(VkDevice device, struct Queues queues, VkImage* image, VkImageView* imgview, struct Error* e_out) {
+
+	const VkExtent3D ext = {800, 600, 1};
+
+	const VkFormat myformat = VK_FORMAT_B8G8R8A8_SRGB;
+
+	VkImageCreateInfo ici = {};
+	ici.sType = VK_STRUCTURE_TYPE_IMAGE_CREATE_INFO;
+	ici.imageType = VK_IMAGE_TYPE_2D;
+	ici.extent = ext;
+	ici.format = myformat;
+	ici.mipLevels = 1;
+	ici.samples = VK_SAMPLE_COUNT_1_BIT;
+	ici.tiling = VK_IMAGE_TILING_OPTIMAL;
+	ici.sharingMode = VK_SHARING_MODE_EXCLUSIVE;
+	ici.queueFamilyIndexCount = 1;
+	ici.pQueueFamilyIndices = &queues.i_graphics_queue_fam;
+	ici.usage = VK_IMAGE_USAGE_COLOR_ATTACHMENT_BIT;
+	ici.arrayLayers = 1;
+	ici.pNext = NULL;
+
+	VkResult r = vkCreateImage(device, &ici, NULL, image);
+	VERIFY("image create", r)
+
+	VkImageViewCreateInfo vci = {};
+	vci.sType = VK_STRUCTURE_TYPE_IMAGE_VIEW_CREATE_INFO;
+	vci.image = *image;
+	vci.viewType = VK_IMAGE_VIEW_TYPE_2D;
+	vci.format = myformat;
+	vci.components.r = VK_COMPONENT_SWIZZLE_IDENTITY;
+	vci.components.g = VK_COMPONENT_SWIZZLE_IDENTITY;
+	vci.components.b = VK_COMPONENT_SWIZZLE_IDENTITY;
+	vci.components.a = VK_COMPONENT_SWIZZLE_IDENTITY;
+	vci.subresourceRange.aspectMask = VK_IMAGE_ASPECT_COLOR_BIT;
+	vci.subresourceRange.baseMipLevel = 0;
+	vci.subresourceRange.levelCount = 1;
+	vci.subresourceRange.baseArrayLayer = 0;
+	vci.subresourceRange.layerCount = 1;
+
+	r = vkCreateImageView(device,&vci,NULL,imgview);
+	VERIFY("view create", r)
+
+
+
+
+	return false;
+}
+
+void destroy_instance(void* obj) {
+	VkInstance* inst = (VkInstance*)obj;
+	vkDestroyInstance(*inst,NULL);
+}
+
+struct DebugCleanup {
+	VkInstance inst;
+	VkDebugUtilsMessengerEXT msg;
+};
+void destroy_debugger(void* obj) {
+	struct DebugCleanup* d = (struct DebugCleanup*)obj;
+	vkDestroyDebugUtilsMessengerEXT(d->inst, d->msg, NULL);
+}
+
+void destroy_device(void* obj) {
+	VkDevice* dev = (VkDevice*)obj;
+	vkDestroyDevice(*dev,NULL);
+}
+
+struct ImageCleanup {
+	VkDevice dev;
+	VkImage img;
+};
+void destroy_image(void* obj) {
+	struct ImageCleanup* d = (struct ImageCleanup*)obj;
+	vkDestroyImage(d->dev, d->img, NULL);
+}
+
+struct ImageViewCleanup {
+	VkDevice dev;
+	VkImageView imgv;
+};
+void destroy_image_view(void* obj) {
+	struct ImageViewCleanup* d = (struct ImageViewCleanup*)obj;
+	vkDestroyImageView(d->dev, d->imgv, NULL);
 }
 
 
 #define MAINCHECK    if(f) {\
         printf("Error, code=%d: %s\n",e.code,e.origin);\
-        return 1;\
+        goto fail; \
     }
+
+
 
 int main() {
 
+	struct CleanupStack cs = {};
+	cs_init(&cs);
 
 	volkInitialize();
     bool f = false;    
@@ -233,19 +331,42 @@ int main() {
     VkInstance my_instance;
 	VkDebugUtilsMessengerEXT debug_messenger;
 	VkDevice my_device;
-
-    f = make_instance(&my_instance, &e);
-	MAINCHECK
-	volkLoadInstance(my_instance);
-	f = make_debugger(my_instance, &debug_messenger, &e);
-	MAINCHECK
-
-	enumerate_devices(my_instance,&my_device, &e);
-
-	cleanup(my_instance, debug_messenger, my_device);
+	struct Queues my_queues = {};
+	VkImage my_img[N_IMAGE];
+	VkImageView my_imgview[N_IMAGE];
 
 	
 
-   return 0;
+    f = make_instance(&my_instance, &e);
+	cs_push(&cs, &my_instance, sizeof(my_instance), destroy_instance);
+	MAINCHECK
+
+	volkLoadInstance(my_instance);
+
+	f = make_debugger(my_instance, &debug_messenger, &e);
+	struct DebugCleanup dc = {my_instance, debug_messenger};
+	cs_push(&cs, &dc, sizeof(dc), destroy_debugger);
+	MAINCHECK
+
+	f = make_device(my_instance,&my_device, &my_queues, &e);
+	cs_push(&cs, &my_device, sizeof(my_device), destroy_device);
+	MAINCHECK
+
+	volkLoadDevice(my_device);
+
+	f = make_images(my_device, my_queues, my_img, my_imgview, &e);
+	struct ImageCleanup ic = {my_device,my_img[0]};
+	struct ImageViewCleanup ivc = {my_device, my_imgview[0]};
+	cs_push(&cs,&ic,sizeof(ic),destroy_image);
+	cs_push(&cs,&ivc,sizeof(ivc),destroy_image_view);
+	MAINCHECK
+
+
+
+	cs_consume(&cs);
+	return 0;
+fail:
+	cs_consume(&cs);
+	return 1;
     
 }

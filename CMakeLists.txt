@@ -16,7 +16,7 @@ FetchContent_MakeAvailable(volk)
 
 
 
-add_executable(diddytron src/main.c)
+add_executable(diddytron src/main.c src/cleanup.c)
 
 set_target_properties(diddytron PROPERTIES
     BUILD_RPATH "/usr/local/lib"
