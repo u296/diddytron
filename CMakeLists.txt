@@ -7,6 +7,7 @@ set(CMAKE_EXPORT_COMPILE_COMMANDS ON)
 #find_package(Vulkan REQUIRED)
 
 include(FetchContent)
+
 FetchContent_Declare(
     volk
     GIT_REPOSITORY https://github.com/zeux/volk.git
@@ -14,9 +15,16 @@ FetchContent_Declare(
 )
 FetchContent_MakeAvailable(volk)
 
+FetchContent_Declare(
+    glfw
+    GIT_REPOSITORY https://github.com/glfw/glfw.git
+    GIT_TAG master
+)
+FetchContent_MakeAvailable(glfw)
 
 
-add_executable(diddytron src/main.c src/cleanup.c)
+
+add_executable(diddytron src/main.c src/cleanup.c src/device.c src/swapchain.c)
 
 set_target_properties(diddytron PROPERTIES
     BUILD_RPATH "/usr/local/lib"
@@ -24,7 +32,7 @@ set_target_properties(diddytron PROPERTIES
     COMPILE_FLAGS "-Wall"
 )
 
-target_link_libraries(diddytron PRIVATE volk::volk)
+target_link_libraries(diddytron PRIVATE volk::volk glfw)
 
 
 

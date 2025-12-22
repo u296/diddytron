@@ -1,39 +1,53 @@
+
 #include <string.h>
 #include<volk.h>
 #include<stdio.h>
 #include<stdbool.h>
 #include<stdlib.h>
+#include<GLFW/glfw3.h>
 
 #include "common.h"
 #include "cleanupstack.h"
+#include "device.h"
+#include "swapchain.h"
 #include "vulkan/vulkan_core.h" // having this here doesn't hurt and  prevents intellisense from adding it at the top which would break compilation
+
 
 #define N_IMAGE 3
 
 
-#define VERIFY(o,r) \
-if (r != VK_SUCCESS) { \
-    *e_out = (struct Error){.origin=o,.code=r}; \
-    return true;\
-}
+
 
 #define PROPAGATE(x) \
 if (!x)
 
 
+const usize WIDTH = 800;
+const usize HEIGHT = 600;
 
 
-
-struct Error {
-    const char* origin;
-    VkResult code;
-};
-
-const char* extensions[3] = {
+const usize N_BASE_EXT = 2;
+const char* extensions[N_BASE_EXT] = {
 	VK_EXT_DEBUG_UTILS_EXTENSION_NAME,
-	VK_KHR_PORTABILITY_ENUMERATION_EXTENSION_NAME,
-    "aoeu"
+	VK_KHR_PORTABILITY_ENUMERATION_EXTENSION_NAME
 };
+
+bool make_window(GLFWwindow** window) {
+	glfwInit();
+
+	glfwWindowHint(GLFW_CLIENT_API, GLFW_NO_API);
+	glfwWindowHint(GLFW_RESIZABLE, GLFW_FALSE);
+
+	*window = glfwCreateWindow(WIDTH, HEIGHT, "diddytron", NULL, NULL);
+
+	return false;
+}
+
+void destroy_window(void* obj) {
+	GLFWwindow* window = (GLFWwindow*)obj;
+	glfwDestroyWindow(window);
+	glfwTerminate();
+}
 
 static VKAPI_ATTR VkBool32 VKAPI_CALL debug_callback(
 	VkDebugUtilsMessageSeverityFlagBitsEXT severity,
@@ -82,6 +96,25 @@ bool make_instance(VkInstance* instance, struct Error* e_out) {
         printf("\t%s\n", layer_prop[i].layerName);
     }
 
+	u32 n_glfw_ext = 0;
+	const char** glfw_ext = glfwGetRequiredInstanceExtensions(&n_glfw_ext);
+
+
+	u32 n_tot_ext = n_glfw_ext + N_BASE_EXT;
+	const char** all_ext = malloc(n_tot_ext * sizeof(const char*));
+
+	for (u32 i = 0; i < N_BASE_EXT; i++) {
+		all_ext[i] = extensions[i];
+	}
+	for (u32 i = 0; i < n_glfw_ext; i++) {
+		all_ext[i + N_BASE_EXT] = glfw_ext[i];
+	}
+
+	printf("requesting these extensions:\n");
+	for (u32 i = 0; i < n_tot_ext; i++) {
+		printf("\t%s\n", all_ext[i]);
+	}
+
 	VkDebugUtilsMessengerCreateInfoEXT mci = make_debugcreateinfo();
 
     VkApplicationInfo appinfo = {};
@@ -96,8 +129,8 @@ bool make_instance(VkInstance* instance, struct Error* e_out) {
     VkInstanceCreateInfo ici = {};
     ici.sType = VK_STRUCTURE_TYPE_INSTANCE_CREATE_INFO;
     ici.pApplicationInfo = &appinfo;
-    ici.enabledExtensionCount = 2;
-    ici.ppEnabledExtensionNames = extensions;
+    ici.enabledExtensionCount = n_tot_ext;
+    ici.ppEnabledExtensionNames = all_ext;
     ici.enabledLayerCount = 0;
     ici.ppEnabledLayerNames = NULL;
     ici.pNext = &mci;
@@ -116,6 +149,7 @@ bool make_instance(VkInstance* instance, struct Error* e_out) {
     printf("created instance\n");
 
     free(instance_ext_prop);
+	free(all_ext);
 
     VERIFY("instance",r)
     return false;
@@ -132,98 +166,10 @@ bool make_debugger(VkInstance instance, VkDebugUtilsMessengerEXT* messenger, str
 
 struct SelectedQueueFamilies {
 	u32 graphicsQF;
+	u32 presentQF;
 };
 
-struct Queues {
-	VkQueue graphics_queue;
-	u32 i_graphics_queue_fam;
-};
 
-bool make_device(VkInstance instance, VkDevice* device, struct Queues* queues, struct Error* e_out) {
-
-	u32 n_dev = 0;
-	VkPhysicalDevice* devs = NULL;
-	vkEnumeratePhysicalDevices(instance, &n_dev, NULL);
-
-	devs = malloc(sizeof(VkPhysicalDevice) * n_dev);
-	VkPhysicalDeviceProperties* props = malloc(sizeof(VkPhysicalDeviceProperties) * n_dev);
-	VkPhysicalDeviceFeatures* feats = malloc(sizeof(VkPhysicalDeviceFeatures) * n_dev);
-
-	vkEnumeratePhysicalDevices(instance, &n_dev, devs);
-
-	printf("Physical devices found: %u\n", n_dev);
-	for (u32 i = 0; i < n_dev; i++) {
-		vkGetPhysicalDeviceProperties(devs[i], &props[i]);
-		vkGetPhysicalDeviceFeatures(devs[i], &feats[i]);
-		printf("\t%s\n", props[i].deviceName);
-	}
-
-	if (n_dev == 0) {
-		printf("no devices found, aborting");
-		exit(1);
-	}
-
-	// just select device 0
-
-	u32 i_sel = 0;
-
-	u32 n_qfam = 0;
-	vkGetPhysicalDeviceQueueFamilyProperties(devs[i_sel], &n_qfam, NULL);
-
-	VkQueueFamilyProperties* qfams = malloc(n_qfam*sizeof(VkQueueFamilyProperties));
-	vkGetPhysicalDeviceQueueFamilyProperties(devs[i_sel],&n_qfam,qfams);
-
-	struct SelectedQueueFamilies sqf = {};
-	struct SelectedQueueFamilies set_if_found = {};
-
-
-	printf("queue families of selected device (%u total):\n", n_qfam);
-	for (u32 i = 0; i < n_qfam; i++) {
-		printf("\tindex %u flags: %x\n",i,qfams[i].queueFlags);
-		if (qfams[i].queueFlags & VK_QUEUE_GRAPHICS_BIT) {
-			sqf.graphicsQF = i;
-			set_if_found.graphicsQF = 1;
-			break;
-		}
-	}
-
-	if (!set_if_found.graphicsQF) {
-		printf("NO GRAPHICS QUEUE\n");
-		exit(1);
-	}
-
-	float qprio = 1.0f;
-
-	VkDeviceQueueCreateInfo dqci = {};
-	dqci.sType = VK_STRUCTURE_TYPE_DEVICE_QUEUE_CREATE_INFO;
-	dqci.queueFamilyIndex = sqf.graphicsQF;
-	dqci.queueCount = 1;
-	dqci.pQueuePriorities = &qprio;
-
-	VkPhysicalDeviceFeatures df = {};
-
-	VkDeviceCreateInfo dci = {};
-	dci.sType = VK_STRUCTURE_TYPE_DEVICE_CREATE_INFO;
-	dci.queueCreateInfoCount = 1;
-	dci.pQueueCreateInfos = &dqci;
-	dci.pEnabledFeatures = &df;
-
-	VkResult r = vkCreateDevice(devs[i_sel], &dci, NULL, device);
-	
-	free(qfams);
-	free(props);
-	free(devs);
-	VERIFY("device creation", r);
-	printf("created device\n");
-
-
-	vkGetDeviceQueue(*device, sqf.graphicsQF, 0, &queues->graphics_queue);
-	printf("got graphics queue %p\n", queues->graphics_queue);
-	queues->i_graphics_queue_fam = sqf.graphicsQF;
-
-	return false;
-
-}
 
 bool make_images(VkDevice device, struct Queues queues, VkImage* image, VkImageView* imgview, struct Error* e_out) {
 
@@ -273,6 +219,27 @@ bool make_images(VkDevice device, struct Queues queues, VkImage* image, VkImageV
 	return false;
 }
 
+bool make_surface(VkInstance inst, GLFWwindow* wnd, VkSurfaceKHR* surface, struct Error* e_out) {
+	VkResult r = glfwCreateWindowSurface(inst, wnd, NULL, surface);
+	VERIFY("create surface", r)
+
+}
+
+struct SurfaceCleanup {
+	VkInstance inst;
+	VkSurfaceKHR surf;
+};
+void destroy_surface(void* obj) {
+	struct SurfaceCleanup* s = (struct SurfaceCleanup*)obj;
+	vkDestroySurfaceKHR(s->inst,s->surf, NULL);
+}
+
+
+
+
+
+
+
 void destroy_instance(void* obj) {
 	VkInstance* inst = (VkInstance*)obj;
 	vkDestroyInstance(*inst,NULL);
@@ -301,15 +268,6 @@ void destroy_image(void* obj) {
 	vkDestroyImage(d->dev, d->img, NULL);
 }
 
-struct ImageViewCleanup {
-	VkDevice dev;
-	VkImageView imgv;
-};
-void destroy_image_view(void* obj) {
-	struct ImageViewCleanup* d = (struct ImageViewCleanup*)obj;
-	vkDestroyImageView(d->dev, d->imgv, NULL);
-}
-
 
 #define MAINCHECK    if(f) {\
         printf("Error, code=%d: %s\n",e.code,e.origin);\
@@ -328,40 +286,62 @@ int main() {
 
     struct Error e = {.code=0,.origin=""};
 
+	GLFWwindow* my_window;
     VkInstance my_instance;
 	VkDebugUtilsMessengerEXT debug_messenger;
+	VkSurfaceKHR my_surf;
+	VkPhysicalDevice my_physdev;
 	VkDevice my_device;
 	struct Queues my_queues = {};
-	VkImage my_img[N_IMAGE];
-	VkImageView my_imgview[N_IMAGE];
+	VkSwapchainKHR my_swapchain;
+	VkFormat swapchain_format;
+	VkExtent2D swapchain_extent;
+	u32 n_swapchain_images = 0;
+	VkImage* swapchain_images;
+	VkImageView* my_imageviews;
 
-	
+	make_window(&my_window);
+	cs_push(&cs, &my_window, sizeof(my_window), destroy_window);
 
     f = make_instance(&my_instance, &e);
-	cs_push(&cs, &my_instance, sizeof(my_instance), destroy_instance);
 	MAINCHECK
+	cs_push(&cs, &my_instance, sizeof(my_instance), destroy_instance);
+	
 
 	volkLoadInstance(my_instance);
 
 	f = make_debugger(my_instance, &debug_messenger, &e);
 	struct DebugCleanup dc = {my_instance, debug_messenger};
+	MAINCHECK
 	cs_push(&cs, &dc, sizeof(dc), destroy_debugger);
-	MAINCHECK
+	
 
-	f = make_device(my_instance,&my_device, &my_queues, &e);
-	cs_push(&cs, &my_device, sizeof(my_device), destroy_device);
+	f = make_surface(my_instance, my_window, &my_surf, &e);
+	struct SurfaceCleanup sc = {my_instance, my_surf};
 	MAINCHECK
+	cs_push(&cs, &sc, sizeof(sc), destroy_surface);
+	
+
+	f = make_device(my_instance, my_surf, &my_physdev, &my_device, &my_queues, &e);
+	MAINCHECK
+	cs_push(&cs, &my_device, sizeof(my_device), destroy_device);
+	
 
 	volkLoadDevice(my_device);
 
-	f = make_images(my_device, my_queues, my_img, my_imgview, &e);
-	struct ImageCleanup ic = {my_device,my_img[0]};
-	struct ImageViewCleanup ivc = {my_device, my_imgview[0]};
-	cs_push(&cs,&ic,sizeof(ic),destroy_image);
-	cs_push(&cs,&ivc,sizeof(ivc),destroy_image_view);
+	f = make_swapchain(my_physdev, my_device, my_queues, my_surf, my_window, &my_swapchain, &swapchain_format, &swapchain_extent,&n_swapchain_images,&swapchain_images, &e);
 	MAINCHECK
+	struct SwapchainCleanup swc = {my_device,my_swapchain, swapchain_images};
+	cs_push(&cs, &swc, sizeof(swc),destroy_swapchain);
 
+	f = make_swapchain_imageviews(my_device, n_swapchain_images, swapchain_images, swapchain_format, &my_imageviews, &e);
+	MAINCHECK
+	struct ImageViewCleanup ivc = {my_device, my_imageviews, n_swapchain_images};
+	cs_push(&cs, &ivc, sizeof(ivc), destroy_imageviews);
 
+	while (false && !glfwWindowShouldClose(my_window)) {
+
+	}
 
 	cs_consume(&cs);
 	return 0;

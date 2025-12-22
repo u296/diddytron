@@ -3,7 +3,7 @@
 #include "common.h"
 #include <stddef.h>
 
-#define CLEANUP_BLOB_PTRS 2
+#define CLEANUP_BLOB_PTRS 4
 
 struct CleanupEntry {
 	void(*destroy)(void*);
