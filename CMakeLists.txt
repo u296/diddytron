@@ -24,7 +24,17 @@ FetchContent_MakeAvailable(glfw)
 
 
 
-add_executable(diddytron src/main.c src/cleanup.c src/device.c src/swapchain.c)
+add_executable(diddytron 
+    src/main.c
+    src/cleanup.c
+    src/device.c
+    src/swapchain.c
+    src/renderpass.c
+    src/pipeline.c
+    src/framebuffers.c
+    src/commandpool.c
+    src/sync.c
+    )
 
 set_target_properties(diddytron PROPERTIES
     BUILD_RPATH "/usr/local/lib"

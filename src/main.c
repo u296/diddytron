@@ -6,10 +6,15 @@
 #include<stdlib.h>
 #include<GLFW/glfw3.h>
 
+#include "commandpool.h"
 #include "common.h"
 #include "cleanupstack.h"
 #include "device.h"
 #include "swapchain.h"
+#include "renderpass.h"
+#include "pipeline.h"
+#include "framebuffers.h"
+#include "sync.h"
 #include "vulkan/vulkan_core.h" // having this here doesn't hurt and  prevents intellisense from adding it at the top which would break compilation
 
 
@@ -299,6 +304,16 @@ int main() {
 	u32 n_swapchain_images = 0;
 	VkImage* swapchain_images;
 	VkImageView* my_imageviews;
+	VkRenderPass my_renderpass;
+	VkPipelineLayout my_pipelinelayout;
+	VkPipeline my_pipeline;
+	VkFramebuffer* my_framebuffers;
+	VkCommandPool my_pool;
+	VkCommandBuffer my_commandbuf;
+	VkSemaphore sem_imgready, sem_rendfinish;
+	VkFence fen_inflight;
+
+
 
 	make_window(&my_window);
 	cs_push(&cs, &my_window, sizeof(my_window), destroy_window);
@@ -339,7 +354,78 @@ int main() {
 	struct ImageViewCleanup ivc = {my_device, my_imageviews, n_swapchain_images};
 	cs_push(&cs, &ivc, sizeof(ivc), destroy_imageviews);
 
-	while (false && !glfwWindowShouldClose(my_window)) {
+	f = make_renderpass(my_device, swapchain_format, &my_renderpass, &e);
+	MAINCHECK
+	struct RenderPassCleanup rpc = {my_device, my_renderpass};
+	cs_push(&cs, &rpc, sizeof(rpc), destroy_renderpass);
+
+	f = make_graphicspipeline(my_device, swapchain_extent,my_renderpass,&my_pipelinelayout,&my_pipeline,&e);
+	MAINCHECK
+	struct PipelineCleanup pc = {my_device, my_pipelinelayout, my_pipeline};
+	cs_push(&cs, &pc, sizeof(pc), destroy_pipeline);
+
+	f = make_framebuffers(my_device, swapchain_extent, n_swapchain_images, my_imageviews, my_renderpass, &my_framebuffers, &e);
+	MAINCHECK
+	struct FramebuffersCleanup fc = {my_device, my_framebuffers, n_swapchain_images};
+	cs_push(&cs, &fc, sizeof(fc), destroy_framebuffers);
+
+	f = make_commandpool(my_device, my_queues, &my_pool, &e);
+	MAINCHECK
+	struct CommandpoolCleanup cc = {my_device, my_pool};
+	cs_push(&cs, &cc, sizeof(cc), destroy_commandpool);
+
+	f = make_commandbuffers(my_device,my_pool,&my_commandbuf, &e);
+	MAINCHECK
+
+	f = make_sync_objects(my_device, &sem_imgready, &sem_rendfinish, &fen_inflight, &e);
+	MAINCHECK
+	struct SyncObjectCleanup soc = {my_device, sem_imgready, sem_rendfinish, fen_inflight};
+	cs_push(&cs, &soc, sizeof(soc), destroy_sync_objects);
+
+	while (!glfwWindowShouldClose(my_window)) {
+		glfwPollEvents();
+
+		vkWaitForFences(my_device, 1, &fen_inflight, VK_TRUE, UINT64_MAX);
+    	vkResetFences(my_device, 1,&fen_inflight);
+
+    	u32 i_image = UINT32_MAX;
+    	vkAcquireNextImageKHR(my_device, my_swapchain, UINT64_MAX, sem_imgready, VK_NULL_HANDLE, &i_image);
+    	vkResetCommandBuffer(my_commandbuf, 0);
+
+    	f = recordcommandbuffer(swapchain_extent, my_framebuffers[i_image], my_commandbuf, my_renderpass, my_pipeline, &e);
+		MAINCHECK
+
+		VkSemaphore waitsems[1] = {
+			sem_imgready
+		};
+		VkSemaphore signalsems[1] = {
+			sem_rendfinish
+		};
+		VkPipelineStageFlags waitstages[1] = {
+			VK_PIPELINE_STAGE_COLOR_ATTACHMENT_OUTPUT_BIT
+		};
+		VkSubmitInfo si = {};
+		si.sType = VK_STRUCTURE_TYPE_SUBMIT_INFO;
+		si.waitSemaphoreCount = 1;
+		si.pWaitSemaphores = waitsems;
+		si.pWaitDstStageMask = waitstages;
+		si.commandBufferCount = 1;
+		si.pCommandBuffers = &my_commandbuf;
+		si.signalSemaphoreCount = 1;
+		si.pSignalSemaphores = signalsems;
+
+		vkQueueSubmit(my_queues.graphics_queue, 1, &si, fen_inflight);
+
+		VkPresentInfoKHR pi = {};
+		pi.sType = VK_STRUCTURE_TYPE_PRESENT_INFO_KHR;
+		pi.waitSemaphoreCount = 1;
+		pi.pWaitSemaphores = signalsems;
+		pi.swapchainCount = 1;
+		pi.pSwapchains = &my_swapchain;
+		pi.pImageIndices = &i_image;
+		pi.pResults = NULL;
+
+		vkQueuePresentKHR(my_queues.present_queue, &pi);
 
 	}
 
