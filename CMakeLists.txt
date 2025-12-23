@@ -27,6 +27,7 @@ FetchContent_MakeAvailable(glfw)
 add_executable(diddytron 
     src/main.c
     src/cleanup.c
+    src/instance.c
     src/device.c
     src/swapchain.c
     src/renderpass.c

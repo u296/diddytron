@@ -176,3 +176,8 @@ bool make_device(VkInstance instance, VkSurfaceKHR surf, VkPhysicalDevice* physd
 	return false;
 
 }
+
+void destroy_device(void* obj) {
+	VkDevice* dev = (VkDevice*)obj;
+	vkDestroyDevice(*dev,NULL);
+}

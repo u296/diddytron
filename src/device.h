@@ -19,4 +19,6 @@ struct SurfaceCapabilities{
 
 bool make_device(VkInstance instance, VkSurfaceKHR surf, VkPhysicalDevice* physdev, VkDevice* device, struct Queues* queues, struct Error* e_out);
 
+void destroy_device(void* obj);
+
 #endif
