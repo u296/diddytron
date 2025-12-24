@@ -2,6 +2,7 @@
 #include <stdio.h>
 #include <stdlib.h>
 #include <string.h>
+#include "cleanupstack.h"
 #include "common.h"
 #include "vulkan/vulkan_core.h"
 
@@ -39,7 +40,27 @@ VkResult make_shadermodule(VkDevice dev, const char* path, VkShaderModule* sm) {
     return r;
 }
 
-bool make_graphicspipeline(VkDevice dev, VkExtent2D swapchainextent, VkRenderPass renderpass, VkPipelineLayout* pipeline_layout, VkPipeline* pipeline, struct Error* e_out) {
+typedef struct PipelineLayoutCleanup {
+    VkDevice dev;
+    VkPipelineLayout layout;
+} PipelineLayoutCleanup;
+
+void destroy_pipelinelayout(void* obj) {
+    PipelineLayoutCleanup* p = (PipelineLayoutCleanup*)obj;
+    vkDestroyPipelineLayout(p->dev, p->layout, NULL);
+}
+
+typedef struct PipelineCleanup{
+    VkDevice dev;
+    VkPipeline pipeline;
+} PipelineCleanup;
+
+void destroy_pipeline(void* obj) {
+    struct PipelineCleanup* p = (struct PipelineCleanup*)obj;
+    vkDestroyPipeline(p->dev, p->pipeline, NULL);
+}
+
+bool make_graphicspipeline(VkDevice dev, VkExtent2D swapchainextent, VkRenderPass renderpass, VkPipelineLayout* pipeline_layout, VkPipeline* pipeline, struct Error* e_out, CleanupStack*cs) {
 
     VkShaderModule vertexshader, fragshader;
 
@@ -142,6 +163,11 @@ bool make_graphicspipeline(VkDevice dev, VkExtent2D swapchainextent, VkRenderPas
 
     
     r = vkCreatePipelineLayout(dev, &plci, NULL, pipeline_layout);
+
+    CLEANUP_START(PipelineLayoutCleanup)
+    {dev,*pipeline_layout}
+    CLEANUP_END(pipelinelayout)
+
     VERIFY("pipeline layout", r);
 
     VkGraphicsPipelineCreateInfo gpci = {};
@@ -163,6 +189,11 @@ bool make_graphicspipeline(VkDevice dev, VkExtent2D swapchainextent, VkRenderPas
     gpci.basePipelineIndex = -1;
 
     r = vkCreateGraphicsPipelines(dev, VK_NULL_HANDLE, 1, &gpci, NULL, pipeline);
+
+    CLEANUP_START(PipelineCleanup)
+    {dev,*pipeline}
+    CLEANUP_END(pipeline)
+
     VERIFY("pipeline", r)
 
 
@@ -170,8 +201,4 @@ bool make_graphicspipeline(VkDevice dev, VkExtent2D swapchainextent, VkRenderPas
     vkDestroyShaderModule(dev, fragshader, NULL);
 }
 
-void destroy_pipeline(void* obj) {
-    struct PipelineCleanup* p = (struct PipelineCleanup*)obj;
-    vkDestroyPipeline(p->dev, p->pipeline, NULL);
-    vkDestroyPipelineLayout(p->dev, p->pipeline_layout, NULL);
-}
+

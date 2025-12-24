@@ -1,15 +1,12 @@
 #ifndef COMMANDPOOL_H
 #define COMMANDPOOL_H
+#include "cleanupstack.h"
 #include "common.h"
 #include "device.h"
 
-struct CommandpoolCleanup {
-    VkDevice dev;
-    VkCommandPool pool;
-};
 
-bool make_commandpool(VkDevice dev, struct Queues queues, VkCommandPool* pool, struct Error* e_out);
-void destroy_commandpool(void* obj);
+
+bool make_commandpool(VkDevice dev, struct Queues queues, VkCommandPool* pool, struct Error* e_out, CleanupStack*cs);
 
 
 

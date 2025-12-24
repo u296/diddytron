@@ -1,4 +1,7 @@
 #include "instance.h"
+#include "cleanupstack.h"
+#include "common.h"
+#include "vulkan/vulkan_core.h"
 #include <stdio.h>
 #include <string.h>
 #include <stdlib.h>
@@ -33,7 +36,12 @@ VkDebugUtilsMessengerCreateInfoEXT make_debugcreateinfo() {
 	return mci;
 }
 
-bool make_instance(VkInstance* instance, struct Error* e_out) {
+void destroy_instance(void* obj) {
+	VkInstance* inst = (VkInstance*)obj;
+	vkDestroyInstance(*inst,NULL);
+}
+
+bool make_instance(VkInstance* instance, struct Error* e_out, CleanupStack* cs) {
 
     u32 n_instance_ext = 0;
 	u32 n_layer = 0;
@@ -107,29 +115,49 @@ bool make_instance(VkInstance* instance, struct Error* e_out) {
 	}
 
     VkResult r = vkCreateInstance(&ici,NULL,instance);
-    printf("created instance\n");
+    printf("tried to create instance\n");
 
     free(instance_ext_prop);
 	free(all_ext);
 
-    VERIFY("instance",r)
+    if (cs != NULL && r == VK_SUCCESS) {
+        cs_push(cs, instance, sizeof(*instance), destroy_instance);
+    }
+
+    VERIFY("instance", r)
+
     return false;
 }
 
-bool make_debugger(VkInstance instance, VkDebugUtilsMessengerEXT* messenger, struct Error* e_out) {
+typedef struct DebugCleanup {
+	VkInstance inst;
+	VkDebugUtilsMessengerEXT msg;
+} DebugCleanup;
+
+void destroy_messenger(void* obj) {
+	struct DebugCleanup* d = (struct DebugCleanup*)obj;
+	vkDestroyDebugUtilsMessengerEXT(d->inst, d->msg, NULL);
+}
+
+bool make_debugger(VkInstance instance, VkDebugUtilsMessengerEXT* messenger, struct Error* e_out, CleanupStack* cs) {
 	VkDebugUtilsMessengerCreateInfoEXT mci = make_debugcreateinfo();
 
 	VkResult r = vkCreateDebugUtilsMessengerEXT(instance, &mci, NULL, messenger);
+
+    if (cs != NULL && r == VK_SUCCESS) {
+        DebugCleanup d = {instance, *messenger};
+        cs_push(cs, &d, sizeof(d), destroy_messenger);
+    }
+
 	VERIFY("debug messenger", r)
 	printf("created debug messenger\n");
 	return false;
 }
 
-bool make_surface(VkInstance inst, GLFWwindow* wnd, VkSurfaceKHR* surface, struct Error* e_out) {
-	VkResult r = glfwCreateWindowSurface(inst, wnd, NULL, surface);
-	VERIFY("create surface", r)
-
-}
+typedef struct SurfaceCleanup {
+	VkInstance inst;
+	VkSurfaceKHR surf;
+} SurfaceCleanup;
 
 void destroy_surface(void* obj) {
 	struct SurfaceCleanup* s = (struct SurfaceCleanup*)obj;
@@ -137,18 +165,26 @@ void destroy_surface(void* obj) {
 }
 
 
+bool make_surface(VkInstance inst, GLFWwindow* wnd, VkSurfaceKHR* surface, struct Error* e_out, CleanupStack* cs) {
+	VkResult r = glfwCreateWindowSurface(inst, wnd, NULL, surface);
 
+    if (cs != NULL && r == VK_SUCCESS) {
+        SurfaceCleanup s = {inst, *surface};
+        cs_push(cs, &s, sizeof(s), destroy_surface);
+    }
 
-
-
-
-void destroy_instance(void* obj) {
-	VkInstance* inst = (VkInstance*)obj;
-	vkDestroyInstance(*inst,NULL);
+	VERIFY("create surface", r)
+    return false;
 }
 
-void destroy_debugger(void* obj) {
-	struct DebugCleanup* d = (struct DebugCleanup*)obj;
-	vkDestroyDebugUtilsMessengerEXT(d->inst, d->msg, NULL);
-}
+
+
+
+
+
+
+
+
+
+
 

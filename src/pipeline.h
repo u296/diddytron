@@ -1,15 +1,9 @@
 #ifndef PIPELINE_H
 #define PIPELINE_H
+#include "cleanupstack.h"
 #include "common.h"
 
-struct PipelineCleanup{
-    VkDevice dev;
-    VkPipelineLayout pipeline_layout;
-    VkPipeline pipeline;
-};
+bool make_graphicspipeline(VkDevice dev, VkExtent2D swapchainextent, VkRenderPass renderpass, VkPipelineLayout* pipeline_layout, VkPipeline* pipeline, struct Error* e_out,CleanupStack*cs);
 
-bool make_graphicspipeline(VkDevice dev, VkExtent2D swapchainextent, VkRenderPass renderpass, VkPipelineLayout* pipeline_layout, VkPipeline* pipeline, struct Error* e_out);
-
-void destroy_pipeline(void* obj);
 
 #endif

@@ -1,22 +1,33 @@
 #include "commandpool.h"
+#include "cleanupstack.h"
 #include "common.h"
 #include "device.h"
 #include "vulkan/vulkan_core.h"
 
-bool make_commandpool(VkDevice dev, struct Queues queues, VkCommandPool* pool, struct Error* e_out) {
+typedef struct CommandpoolCleanup {
+    VkDevice dev;
+    VkCommandPool pool;
+} CommandpoolCleanup;
+
+void destroy_commandpool(void* obj) {
+    struct CommandpoolCleanup* cc = (struct CommandpoolCleanup*)obj;
+    vkDestroyCommandPool(cc->dev, cc->pool, NULL);
+}
+
+bool make_commandpool(VkDevice dev, struct Queues queues, VkCommandPool* pool, struct Error* e_out, CleanupStack* cs) {
     VkCommandPoolCreateInfo cpi = {};
     cpi.sType = VK_STRUCTURE_TYPE_COMMAND_POOL_CREATE_INFO;
     cpi.flags = VK_COMMAND_POOL_CREATE_RESET_COMMAND_BUFFER_BIT;
     cpi.queueFamilyIndex = queues.i_graphics_queue_fam;
 
     VkResult r = vkCreateCommandPool(dev, &cpi, NULL, pool);
+
+    CLEANUP_START(CommandpoolCleanup)
+    {dev,*pool}
+    CLEANUP_END(commandpool)
+
     VERIFY("commandpool", r)
     return false;
-}
-
-void destroy_commandpool(void* obj) {
-    struct CommandpoolCleanup* cc = (struct CommandpoolCleanup*)obj;
-    vkDestroyCommandPool(cc->dev, cc->pool, NULL);
 }
 
 bool make_commandbuffers(VkDevice dev, VkCommandPool pool, VkCommandBuffer* cmdbuf, struct Error* e_out) {

@@ -1,4 +1,5 @@
 #include "swapchain.h"
+#include "cleanupstack.h"
 #include "common.h"
 #include "vulkan/vulkan_core.h"
 #include <GLFW/glfw3.h>
@@ -7,7 +8,36 @@
 
 
 
-bool make_swapchain(VkPhysicalDevice physdev, VkDevice dev, struct Queues queues, VkSurfaceKHR surf, GLFWwindow* wnd, VkSwapchainKHR* swapchain, VkFormat*swapchain_format,VkExtent2D* swapchain_extent, u32* n_swap_images, VkImage** images, struct Error* e_out) {
+
+
+
+
+typedef struct SwapchainCleanup {
+	VkDevice dev;
+	VkSwapchainKHR swapchain;
+	VkImage* images;
+} SwapchainCleanup;
+
+void destroy_swapchain(void* obj) {
+	struct SwapchainCleanup* s = (struct SwapchainCleanup*)obj;
+	vkDestroySwapchainKHR(s->dev, s->swapchain, NULL);
+	free(s->images);
+}
+
+bool make_swapchain(
+	VkPhysicalDevice physdev,
+	VkDevice dev,
+	Queues queues,
+	VkSurfaceKHR surf,
+	GLFWwindow* wnd,
+	VkSwapchainKHR* swapchain,
+	VkFormat*swapchain_format,
+	VkExtent2D* swapchain_extent,
+	u32* n_swap_images,
+	VkImage** images,
+	struct Error* e_out,
+	CleanupStack* cs
+) {
 	VkSurfaceCapabilitiesKHR surfcap = {};
 	vkGetPhysicalDeviceSurfaceCapabilitiesKHR(physdev, surf, &surfcap);
 
@@ -89,6 +119,18 @@ bool make_swapchain(VkPhysicalDevice physdev, VkDevice dev, struct Queues queues
 	sci.oldSwapchain = VK_NULL_HANDLE;
 
 	VkResult r = vkCreateSwapchainKHR(dev,&sci,NULL, swapchain);
+
+
+	if (r == VK_SUCCESS) {
+		vkGetSwapchainImagesKHR(dev, *swapchain,n_swap_images, NULL);
+		*images = malloc(*n_swap_images * sizeof(VkImage));
+		vkGetSwapchainImagesKHR(dev, *swapchain,n_swap_images, *images);
+	}
+	
+	CLEANUP_START(SwapchainCleanup)
+	{dev, *swapchain, *images}
+	CLEANUP_END(swapchain)
+
 	VERIFY("swapchain create", r);
 	printf("made swapchain with extents %ux%u\n", sci.imageExtent.width,sci.imageExtent.height);
 
@@ -96,20 +138,26 @@ bool make_swapchain(VkPhysicalDevice physdev, VkDevice dev, struct Queues queues
 	*swapchain_format = chosen_format.format;
 
 	
-	vkGetSwapchainImagesKHR(dev, *swapchain,n_swap_images, NULL);
-	*images = malloc(*n_swap_images * sizeof(VkImage));
-	vkGetSwapchainImagesKHR(dev, *swapchain,n_swap_images, *images);
+	
 
 	return false;
 }
 
-void destroy_swapchain(void* obj) {
-	struct SwapchainCleanup* s = (struct SwapchainCleanup*)obj;
-	vkDestroySwapchainKHR(s->dev, s->swapchain, NULL);
-	free(s->images);
+typedef struct ImageViewCleanup {
+    VkDevice dev;
+    VkImageView* views;
+    u32 n_imageviews;
+} ImageViewCleanup;
+
+void destroy_imageviews(void* obj) {
+	struct ImageViewCleanup* s = (struct ImageViewCleanup*)obj;
+	for (u32 i = 0; i < s->n_imageviews; i++) {
+        vkDestroyImageView(s->dev, s->views[i], NULL);
+    }
+    free(s->views);
 }
 
-bool make_swapchain_imageviews(VkDevice dev, u32 n_swapchain_images, VkImage* images, VkFormat swapchainformat, VkImageView** imageviews, struct Error* e_out) {
+bool make_swapchain_imageviews(VkDevice dev, u32 n_swapchain_images, VkImage* images, VkFormat swapchainformat, VkImageView** imageviews, struct Error* e_out, CleanupStack* cs) {
     *imageviews = malloc(n_swapchain_images * sizeof(VkImageView));
 
     VkResult r = VK_ERROR_UNKNOWN;
@@ -131,15 +179,20 @@ bool make_swapchain_imageviews(VkDevice dev, u32 n_swapchain_images, VkImage* im
         vci.subresourceRange.layerCount = 1;
 
         r = vkCreateImageView(dev, &vci, NULL, &(*imageviews)[i]);
-        VERIFY("image view create", r)
+
+		
+
+        if ( r != VK_SUCCESS) {
+			break;
+		}
     }
+
+	CLEANUP_START(ImageViewCleanup)
+	{dev,*imageviews,n_swapchain_images}
+	CLEANUP_END(imageviews)
+
+	VERIFY("image views", r)
+
     return false;
 }
 
-void destroy_imageviews(void* obj) {
-	struct ImageViewCleanup* s = (struct ImageViewCleanup*)obj;
-	for (u32 i = 0; i < s->n_imageviews; i++) {
-        vkDestroyImageView(s->dev, s->views[i], NULL);
-    }
-    free(s->views);
-}

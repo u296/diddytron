@@ -1,4 +1,5 @@
 #include "device.h"
+#include "cleanupstack.h"
 #include "vulkan/vulkan_core.h"
 #include <stdbool.h>
 #include <stdio.h>
@@ -70,7 +71,12 @@ bool physical_device_find_queuefams(VkPhysicalDevice dev, VkSurfaceKHR surf, str
     return true;
 }
 
-bool make_device(VkInstance instance, VkSurfaceKHR surf, VkPhysicalDevice* physdev, VkDevice* device, struct Queues* queues, struct Error* e_out) {
+void destroy_device(void* obj) {
+	VkDevice* dev = (VkDevice*)obj;
+	vkDestroyDevice(*dev,NULL);
+}
+
+bool make_device(VkInstance instance, VkSurfaceKHR surf, VkPhysicalDevice* physdev, VkDevice* device, struct Queues* queues, struct Error* e_out, CleanupStack* cs) {
 
 	u32 n_dev = 0;
 	VkPhysicalDevice* devs = NULL;
@@ -160,6 +166,11 @@ bool make_device(VkInstance instance, VkSurfaceKHR surf, VkPhysicalDevice* physd
 
 	free(props);
 	free(devs);
+
+	if (cs != NULL && r == VK_SUCCESS) {
+		cs_push(cs, device, sizeof(*device), destroy_device);
+	}
+	
 	VERIFY("device creation", r);
 	printf("created device\n");
 
@@ -177,7 +188,3 @@ bool make_device(VkInstance instance, VkSurfaceKHR surf, VkPhysicalDevice* physd
 
 }
 
-void destroy_device(void* obj) {
-	VkDevice* dev = (VkDevice*)obj;
-	vkDestroyDevice(*dev,NULL);
-}

@@ -96,69 +96,49 @@ int main() {
 	make_window(&my_window);
 	cs_push(&cs, &my_window, sizeof(my_window), destroy_window);
 
-    f = make_instance(&my_instance, &e);
+    f = make_instance(&my_instance, &e, &cs);
 	MAINCHECK
-	cs_push(&cs, &my_instance, sizeof(my_instance), destroy_instance);
 	
 
 	volkLoadInstance(my_instance);
 
-	f = make_debugger(my_instance, &debug_messenger, &e);
-	struct DebugCleanup dc = {my_instance, debug_messenger};
+	f = make_debugger(my_instance, &debug_messenger, &e, &cs);
 	MAINCHECK
-	cs_push(&cs, &dc, sizeof(dc), destroy_debugger);
 	
 
-	f = make_surface(my_instance, my_window, &my_surf, &e);
-	struct SurfaceCleanup sc = {my_instance, my_surf};
+	f = make_surface(my_instance, my_window, &my_surf, &e, &cs);
 	MAINCHECK
-	cs_push(&cs, &sc, sizeof(sc), destroy_surface);
 	
 
-	f = make_device(my_instance, my_surf, &my_physdev, &my_device, &my_queues, &e);
+	f = make_device(my_instance, my_surf, &my_physdev, &my_device, &my_queues, &e, &cs);
 	MAINCHECK
-	cs_push(&cs, &my_device, sizeof(my_device), destroy_device);
 	
 
 	volkLoadDevice(my_device);
 
-	f = make_swapchain(my_physdev, my_device, my_queues, my_surf, my_window, &my_swapchain, &swapchain_format, &swapchain_extent,&n_swapchain_images,&swapchain_images, &e);
+	f = make_swapchain(my_physdev, my_device, my_queues, my_surf, my_window, &my_swapchain, &swapchain_format, &swapchain_extent,&n_swapchain_images,&swapchain_images, &e, &cs);
 	MAINCHECK
-	struct SwapchainCleanup swc = {my_device,my_swapchain, swapchain_images};
-	cs_push(&cs, &swc, sizeof(swc),destroy_swapchain);
 
-	f = make_swapchain_imageviews(my_device, n_swapchain_images, swapchain_images, swapchain_format, &my_imageviews, &e);
+	f = make_swapchain_imageviews(my_device, n_swapchain_images, swapchain_images, swapchain_format, &my_imageviews, &e, &cs);
 	MAINCHECK
-	struct ImageViewCleanup ivc = {my_device, my_imageviews, n_swapchain_images};
-	cs_push(&cs, &ivc, sizeof(ivc), destroy_imageviews);
 
-	f = make_renderpass(my_device, swapchain_format, &my_renderpass, &e);
+	f = make_renderpass(my_device, swapchain_format, &my_renderpass, &e, &cs);
 	MAINCHECK
-	struct RenderPassCleanup rpc = {my_device, my_renderpass};
-	cs_push(&cs, &rpc, sizeof(rpc), destroy_renderpass);
 
-	f = make_graphicspipeline(my_device, swapchain_extent,my_renderpass,&my_pipelinelayout,&my_pipeline,&e);
+	f = make_graphicspipeline(my_device, swapchain_extent,my_renderpass,&my_pipelinelayout,&my_pipeline,&e,&cs);
 	MAINCHECK
-	struct PipelineCleanup pc = {my_device, my_pipelinelayout, my_pipeline};
-	cs_push(&cs, &pc, sizeof(pc), destroy_pipeline);
 
-	f = make_framebuffers(my_device, swapchain_extent, n_swapchain_images, my_imageviews, my_renderpass, &my_framebuffers, &e);
+	f = make_framebuffers(my_device, swapchain_extent, n_swapchain_images, my_imageviews, my_renderpass, &my_framebuffers, &e,&cs);
 	MAINCHECK
-	struct FramebuffersCleanup fc = {my_device, my_framebuffers, n_swapchain_images};
-	cs_push(&cs, &fc, sizeof(fc), destroy_framebuffers);
 
-	f = make_commandpool(my_device, my_queues, &my_pool, &e);
+	f = make_commandpool(my_device, my_queues, &my_pool, &e, &cs);
 	MAINCHECK
-	struct CommandpoolCleanup cc = {my_device, my_pool};
-	cs_push(&cs, &cc, sizeof(cc), destroy_commandpool);
 
 	f = make_commandbuffers(my_device,my_pool,&my_commandbuf, &e);
 	MAINCHECK
 
-	f = make_sync_objects(my_device, &sem_imgready, &sem_rendfinish, &fen_inflight, &e);
+	f = make_sync_objects(my_device, &sem_imgready, &sem_rendfinish, &fen_inflight, &e,&cs);
 	MAINCHECK
-	struct SyncObjectCleanup soc = {my_device, sem_imgready, sem_rendfinish, fen_inflight};
-	cs_push(&cs, &soc, sizeof(soc), destroy_sync_objects);
 
 	while (!glfwWindowShouldClose(my_window)) {
 		glfwPollEvents();

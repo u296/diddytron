@@ -1,10 +1,20 @@
 #include "renderpass.h"
+#include "cleanupstack.h"
 #include "common.h"
 #include "vulkan/vulkan_core.h"
 #include <volk.h>
 
+typedef struct RenderPassCleanup {
+    VkDevice dev;
+    VkRenderPass renderpass;
+} RenderPassCleanup;
 
-bool make_renderpass(VkDevice dev, VkFormat swapchainformat, VkRenderPass* renderpass, struct Error* e_out) {
+void destroy_renderpass(void* obj) {
+    struct RenderPassCleanup* r = (struct RenderPassCleanup*)obj;
+    vkDestroyRenderPass(r->dev, r->renderpass, NULL);
+}
+
+bool make_renderpass(VkDevice dev, VkFormat swapchainformat, VkRenderPass* renderpass, struct Error* e_out, CleanupStack* cs) {
     VkAttachmentDescription color_attachment = {};
     color_attachment.format = swapchainformat;
     color_attachment.samples = VK_SAMPLE_COUNT_1_BIT;
@@ -42,13 +52,14 @@ bool make_renderpass(VkDevice dev, VkFormat swapchainformat, VkRenderPass* rende
     rpci.pDependencies = &sd;
 
     VkResult r = vkCreateRenderPass(dev, &rpci, NULL, renderpass);
+
+    CLEANUP_START(RenderPassCleanup)
+    {dev,*renderpass}
+    CLEANUP_END(renderpass)
+
     VERIFY("renderpass create", r)
 
     return false;
 
 }
 
-void destroy_renderpass(void* obj) {
-    struct RenderPassCleanup* r = (struct RenderPassCleanup*)obj;
-    vkDestroyRenderPass(r->dev, r->renderpass, NULL);
-}

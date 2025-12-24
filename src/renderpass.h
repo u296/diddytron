@@ -1,14 +1,11 @@
 #ifndef RENDERPASS_H
 #define RENDERPASS_H
+#include "cleanupstack.h"
 #include "common.h"
 
-struct RenderPassCleanup {
-    VkDevice dev;
-    VkRenderPass renderpass;
-};
 
-bool make_renderpass(VkDevice dev, VkFormat swapchainformat, VkRenderPass* renderpass, struct Error* e_out);
 
-void destroy_renderpass(void*obj);
+bool make_renderpass(VkDevice dev, VkFormat swapchainformat, VkRenderPass* renderpass, struct Error* e_out, CleanupStack* cs);
+
 
 #endif

@@ -18,9 +18,9 @@ if (r != VK_SUCCESS) { \
     return true;\
 }
 
-struct Error {
+typedef struct Error {
     const char* origin;
     VkResult code;
-};
+} Error;
 
 #endif
