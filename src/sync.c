@@ -1,3 +1,5 @@
+#include <stdlib.h>
+
 #include "sync.h"
 #include "cleanupstack.h"
 #include "common.h"
@@ -38,7 +40,24 @@ void destroy_sync_objects(void* obj) {
     vkDestroyFence(s->dev, s->fen, NULL);
 }
 
-bool make_sync_objects(VkDevice dev, VkSemaphore* sem1, VkSemaphore* sem2, VkFence* fen, struct Error* e_out, CleanupStack*cs) {
+bool make_sync_objects(VkDevice dev, const u32 n_max_inflight, VkSemaphore** sem1, VkSemaphore** sem2, VkFence** fen, struct Error* e_out, CleanupStack*cs) {
+    
+    *sem1 = malloc(sizeof(VkSemaphore)*n_max_inflight);
+    *sem2 = malloc(sizeof(VkSemaphore)*n_max_inflight);
+    *fen = malloc(sizeof(VkFence)*n_max_inflight);
+
+    CLEANUP_START_NORES(void*)
+    *sem1
+    CLEANUP_END(memfree)
+    CLEANUP_START_NORES(void*)
+    *sem2
+    CLEANUP_END(memfree)
+    CLEANUP_START_NORES(void*)
+    *fen
+    CLEANUP_END(memfree)
+
+
+    
     VkSemaphoreCreateInfo sci = {};
     sci.sType = VK_STRUCTURE_TYPE_SEMAPHORE_CREATE_INFO;
     
@@ -46,23 +65,27 @@ bool make_sync_objects(VkDevice dev, VkSemaphore* sem1, VkSemaphore* sem2, VkFen
     fci.sType = VK_STRUCTURE_TYPE_FENCE_CREATE_INFO;
     fci.flags = VK_FENCE_CREATE_SIGNALED_BIT;
 
-    VkResult r = VK_ERROR_UNKNOWN;
-    r = vkCreateSemaphore(dev, &sci, NULL, sem1);
+    for (u32 i = 0; i < n_max_inflight; i++) {
+        VkResult r = VK_ERROR_UNKNOWN;
 
-    CLEANUP_START(SemaphoreCleanup)
-    {dev,*sem1}
-    CLEANUP_END(semaphore)
-    VERIFY("syncobj", r)
-    r = vkCreateSemaphore(dev, &sci, NULL, sem2);
-    CLEANUP_START(SemaphoreCleanup)
-    {dev,*sem2}
-    CLEANUP_END(semaphore)
-    VERIFY("syncobj", r)
-    r = vkCreateFence(dev, &fci, NULL, fen);
-    CLEANUP_START(FenceCleanup)
-    {dev,*fen}
-    CLEANUP_END(fence)
-    VERIFY("syncobj", r)
+        r = vkCreateSemaphore(dev, &sci, NULL, &(*sem1)[i]);
+        CLEANUP_START(SemaphoreCleanup)
+        {dev,(*sem1)[i]}
+        CLEANUP_END(semaphore)
+        VERIFY("syncobj", r)
+
+        r = vkCreateSemaphore(dev, &sci, NULL, &(*sem2)[i]);
+        CLEANUP_START(SemaphoreCleanup)
+        {dev,(*sem2)[i]}
+        CLEANUP_END(semaphore)
+        VERIFY("syncobj", r)
+
+        r = vkCreateFence(dev, &fci, NULL, &(*fen)[i]);
+        CLEANUP_START(FenceCleanup)
+        {dev,(*fen)[i]}
+        CLEANUP_END(fence)
+        VERIFY("syncobj", r)
+    }
 
     return false;
 

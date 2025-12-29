@@ -18,6 +18,15 @@ CLEANUP_END(pipeline)         <--- pipeline means that the destruction function 
 #define CLEANUP_END(varname)	;cs_push(cs, &cleanup_context, sizeof(cleanup_context), destroy_##varname);\
 }
 
+// doesn't require result
+#define CLEANUP_START_NORES(cleanuptype) if (cs != NULL) { \
+	cleanuptype cleanup_context = 
+
+#define CLEANUP_START_ONORES(cleanuptype) { cleanuptype cleanup_context =
+
+#define CLEANUP_END_O(varname)	;cs_push(&cs, &cleanup_context, sizeof(cleanup_context), destroy_##varname);\
+}
+
 #define CLEANUP_BLOB_PTRS 4
 
 typedef struct CleanupEntry {
@@ -37,4 +46,7 @@ void cs_push(CleanupStack* cs, void* ctx, usize ctxsize, void(*destructor)(void*
 void cs_push_entry(CleanupStack* cs, CleanupEntry ce);
 
 void cs_consume(CleanupStack* cs);
+
+void destroy_memfree(void* obj);
+
 #endif

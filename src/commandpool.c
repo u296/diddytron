@@ -3,6 +3,7 @@
 #include "common.h"
 #include "device.h"
 #include "vulkan/vulkan_core.h"
+#include<stdlib.h>
 
 typedef struct CommandpoolCleanup {
     VkDevice dev;
@@ -30,14 +31,20 @@ bool make_commandpool(VkDevice dev, struct Queues queues, VkCommandPool* pool, s
     return false;
 }
 
-bool make_commandbuffers(VkDevice dev, VkCommandPool pool, VkCommandBuffer* cmdbuf, struct Error* e_out) {
+bool make_commandbuffers(VkDevice dev, VkCommandPool pool, u32 n_max_inflight, VkCommandBuffer** cmdbufs, struct Error* e_out, CleanupStack* cs) {
+    
+    *cmdbufs = malloc(sizeof(VkCommandBuffer)*n_max_inflight);
+    CLEANUP_START_NORES(void*)
+    *cmdbufs
+    CLEANUP_END(memfree)
+    
     VkCommandBufferAllocateInfo ai = {};
     ai.sType = VK_STRUCTURE_TYPE_COMMAND_BUFFER_ALLOCATE_INFO;
     ai.commandPool = pool;
     ai.level = VK_COMMAND_BUFFER_LEVEL_PRIMARY;
-    ai.commandBufferCount = 1;
+    ai.commandBufferCount = n_max_inflight;
 
-    VkResult r = vkAllocateCommandBuffers(dev, &ai, cmdbuf);
+    VkResult r = vkAllocateCommandBuffers(dev, &ai, *cmdbufs);
     VERIFY("cmdbuf", r)
 
     return false;

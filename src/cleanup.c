@@ -31,11 +31,19 @@ void cs_push_entry(struct CleanupStack* cs, struct CleanupEntry ce) {
 }
 
 void cs_consume(struct CleanupStack* cs) {
-	for (u32 i = cs->n-1; i > 0; i--) {
-		cs->entries[i].destroy(cs->entries[i].blob);
+	
+	for (u32 i_p1 = cs->n; i_p1 > 0; i_p1--) {
+		cs->entries[i_p1-1].destroy(cs->entries[i_p1-1].blob);
 	}
-	free(cs->entries);
+	if (cs->cap != 0 && cs->entries != NULL) {
+		free(cs->entries);
+	}
 	cs->entries = NULL;
 	cs->cap = 0;
 	cs->n = 0;
+}
+
+void destroy_memfree(void* obj) {
+    void** themem = (void**)obj;
+	free(*themem);
 }
