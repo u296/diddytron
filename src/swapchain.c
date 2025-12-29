@@ -196,19 +196,3 @@ bool make_swapchain_imageviews(VkDevice dev, u32 n_swapchain_images, VkImage* im
     return false;
 }
 
-
-
-void remake_swapchain(
-	VkPhysicalDevice phdev,
-	VkDevice dev,
-	Queues queues,
-	VkSurfaceKHR surf,
-	GLFWwindow* wnd,
-	VkSwapchainKHR* swp,
-	VkFormat** swp_format,
-	VkExtent2D** swp_ext,
-	VkFramebuffer** fbs
-) {
-
-	vkDestroyFramebuffer(dev, fbs, NULL);
-}

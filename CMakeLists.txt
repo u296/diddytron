@@ -35,12 +35,14 @@ add_executable(diddytron
     src/framebuffers.c
     src/commandpool.c
     src/sync.c
+    src/vertexbuf.c
     )
 
 set_target_properties(diddytron PROPERTIES
     BUILD_RPATH "/usr/local/lib"
     INSTALL_RPATH "/usr/local/lib"
     COMPILE_FLAGS "-Wall"
+    C_STANDARD 23
 )
 
 target_link_libraries(diddytron PRIVATE volk::volk glfw)

@@ -7,7 +7,7 @@
 #include <stdlib.h>
 
 
-const usize N_BASE_EXT = 2;
+constexpr usize N_BASE_EXT = 2;
 const char* extensions[N_BASE_EXT] = {
 	VK_EXT_DEBUG_UTILS_EXTENSION_NAME,
 	VK_KHR_PORTABILITY_ENUMERATION_EXTENSION_NAME
@@ -19,8 +19,8 @@ static VKAPI_ATTR VkBool32 VKAPI_CALL debug_callback(
 	const VkDebugUtilsMessengerCallbackDataEXT* callback_data,
 	void* user_data
 ) {
-	if (severity >= VK_DEBUG_UTILS_MESSAGE_SEVERITY_WARNING_BIT_EXT) {
-		printf("[WARNING]: %s\n", callback_data->pMessage);
+	if ( true  || severity >= VK_DEBUG_UTILS_MESSAGE_SEVERITY_WARNING_BIT_EXT) {
+		printf("[DBG]: %s\n", callback_data->pMessage);
 	}
 
 	return VK_FALSE;

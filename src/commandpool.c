@@ -51,7 +51,7 @@ bool make_commandbuffers(VkDevice dev, VkCommandPool pool, u32 n_max_inflight, V
 
 }
 
-bool recordcommandbuffer(VkExtent2D swapchainextent, VkFramebuffer fb, VkCommandBuffer cmdbuf, VkRenderPass renderpass, VkPipeline pipeline, struct Error* e_out) {
+bool recordcommandbuffer(VkExtent2D swapchainextent, VkFramebuffer fb, VkCommandBuffer cmdbuf, VkRenderPass renderpass, Renderable ren, struct Error* e_out) {
 
     VkCommandBufferBeginInfo cbbi = {};
     cbbi.sType = VK_STRUCTURE_TYPE_COMMAND_BUFFER_BEGIN_INFO;
@@ -87,14 +87,22 @@ bool recordcommandbuffer(VkExtent2D swapchainextent, VkFramebuffer fb, VkCommand
     scissor.extent = swapchainextent;
     scissor.offset = (struct VkOffset2D){0,0};
 
+    VkBuffer vbufs[] = {ren.vertexbuf.buf};
+    VkDeviceSize vbuf_offsets[] = {0};
+
     vkBeginCommandBuffer(cmdbuf, &cbbi);
 
 
     vkCmdBeginRenderPass(cmdbuf, &rpbi, VK_SUBPASS_CONTENTS_INLINE);
-    vkCmdBindPipeline(cmdbuf, VK_PIPELINE_BIND_POINT_GRAPHICS, pipeline);
+    vkCmdBindPipeline(cmdbuf, VK_PIPELINE_BIND_POINT_GRAPHICS, ren.pipeline);
+
+    vkCmdBindVertexBuffers(cmdbuf,0,1, vbufs, vbuf_offsets);
+    vkCmdBindIndexBuffer(cmdbuf, ren.indexbuf.buf, 0, VK_INDEX_TYPE_UINT16);
     vkCmdSetViewport(cmdbuf, 0, 1, &viewport);
     vkCmdSetScissor(cmdbuf, 0, 1, &scissor);
-    vkCmdDraw(cmdbuf, 3, 1, 0, 0);
+
+    vkCmdDrawIndexed(cmdbuf,6,1,0,0,0);
+    //vkCmdDraw(cmdbuf, 3, 1, 0, 0);
     vkCmdEndRenderPass(cmdbuf);
 
     VkResult r = vkEndCommandBuffer(cmdbuf);

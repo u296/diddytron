@@ -4,7 +4,7 @@
 #include <string.h>
 #include "cleanupstack.h"
 #include "common.h"
-#include "vulkan/vulkan_core.h"
+#include "vertexbuf.h"
 
 void read_file(const char* filename, usize* bufsize, u8** buf) {
     
@@ -64,7 +64,7 @@ bool make_graphicspipeline(VkDevice dev, VkExtent2D swapchainextent, VkRenderPas
 
     VkShaderModule vertexshader, fragshader;
 
-    VkResult r = make_shadermodule(dev, "/Users/todd/Code/diddytron/shaders/vert.spv", &vertexshader);
+    VkResult r = make_shadermodule(dev, "/Users/todd/Code/diddytron/shaders/nonhardcode_vert.spv", &vertexshader);
     VERIFY("vert shader", r)
     
     r = make_shadermodule(dev, "/Users/todd/Code/diddytron/shaders/frag.spv", &fragshader);
@@ -86,10 +86,10 @@ bool make_graphicspipeline(VkDevice dev, VkExtent2D swapchainextent, VkRenderPas
 
     VkPipelineVertexInputStateCreateInfo vici = {};
     vici.sType = VK_STRUCTURE_TYPE_PIPELINE_VERTEX_INPUT_STATE_CREATE_INFO;
-    vici.vertexBindingDescriptionCount = 0;
-    vici.pVertexBindingDescriptions = NULL;
-    vici.vertexAttributeDescriptionCount = 0;
-    vici.pVertexAttributeDescriptions = NULL;
+    vici.vertexBindingDescriptionCount = 1;
+    vici.pVertexBindingDescriptions = &vertex_binding_desc;
+    vici.vertexAttributeDescriptionCount = N_VERT_ATTRIB;
+    vici.pVertexAttributeDescriptions = vertex_attrib_desc;
 
     VkPipelineInputAssemblyStateCreateInfo iaci = {};
     iaci.sType = VK_STRUCTURE_TYPE_PIPELINE_INPUT_ASSEMBLY_STATE_CREATE_INFO;
@@ -121,7 +121,7 @@ bool make_graphicspipeline(VkDevice dev, VkExtent2D swapchainextent, VkRenderPas
     rci.rasterizerDiscardEnable = VK_FALSE;
     rci.polygonMode = VK_POLYGON_MODE_FILL;
     rci.lineWidth = 1.0f;
-    rci.cullMode = VK_CULL_MODE_BACK_BIT;
+    rci.cullMode = VK_CULL_MODE_NONE;
     rci.frontFace = VK_FRONT_FACE_CLOCKWISE;
     rci.depthBiasEnable = VK_FALSE;
     rci.depthBiasConstantFactor = 0.0f;

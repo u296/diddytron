@@ -18,19 +18,18 @@
 #include "pipeline.h"
 #include "framebuffers.h"
 #include "sync.h"
+#include "vertexbuf.h"
 #include "vulkan/vulkan_core.h" // having this here doesn't hurt and  prevents intellisense from adding it at the top which would break compilation
 
 
-#define N_IMAGE 3
 
 
 
 
 
 
-
-const usize WIDTH = 800;
-const usize HEIGHT = 600;
+constexpr usize WIDTH = 800;
+constexpr usize HEIGHT = 600;
 
 
 bool make_window(GLFWwindow** window) {
@@ -73,7 +72,7 @@ LoopStatus do_renderloop(
 	bool* fb_resized,
 	VkExtent2D swp_ext,
 	VkRenderPass rp,
-	VkPipeline pipe,
+	Renderable tri,
 	VkCommandBuffer* cmdbufs,
 	VkSemaphore* sem_imgready,
 	VkSemaphore* sem_rendfinish,
@@ -108,7 +107,7 @@ LoopStatus do_renderloop(
 		vkResetFences(dev, 1,&fen_inflight[i_frame_modn]);
     	vkResetCommandBuffer(cmdbufs[i_frame_modn], 0);
 
-    	f = recordcommandbuffer(swp_ext, fbufs[i_image], cmdbufs[i_frame_modn], rp, pipe, &e);
+    	f = recordcommandbuffer(swp_ext, fbufs[i_image], cmdbufs[i_frame_modn], rp, tri, &e);
 		MAINCHECK
 		
 
@@ -197,7 +196,7 @@ int main() {
 
     struct Error e = {.code=0,.origin=""};
 
-	const u32 n_max_inflight = 2;
+	constexpr u32 n_max_inflight = 2;
 
 	GLFWwindow* my_window;
 	bool fb_resized = false;
@@ -215,9 +214,11 @@ int main() {
 	VkImageView* my_imageviews;
 	VkRenderPass my_renderpass;
 	VkPipelineLayout my_pipelinelayout;
-	VkPipeline my_pipeline;
+	Renderable tri;
 	VkFramebuffer* my_framebuffers;
 	VkCommandPool my_pool;
+	VkBuffer my_ibuf;
+	VkDeviceMemory my_ibuf_mem;
 	VkCommandBuffer* my_commandbufs;
 	VkSemaphore* sem_imgready;
 	VkSemaphore* sem_rendfinish;
@@ -267,13 +268,19 @@ int main() {
 	f = make_renderpass(my_device, swapchain_format, &my_renderpass, &e, &cs);
 	MAINCHECK
 
-	f = make_graphicspipeline(my_device, swapchain_extent,my_renderpass,&my_pipelinelayout,&my_pipeline,&e,&cs);
+	f = make_graphicspipeline(my_device, swapchain_extent,my_renderpass,&my_pipelinelayout,&tri.pipeline,&e,&cs);
 	MAINCHECK
 
 	f = make_framebuffers(my_device, swapchain_extent, n_swapchain_images, my_imageviews, my_renderpass, &my_framebuffers, &e,&swp_cs);
 	MAINCHECK
 
 	f = make_commandpool(my_device, my_queues, &my_pool, &e, &cs);
+	MAINCHECK
+
+	f = make_vertexbuffer(my_physdev, my_device, my_queues, my_pool, &tri.vertexbuf, &e, &cs);
+	MAINCHECK
+
+	f = make_indexbuffer(my_physdev, my_device, my_queues, my_pool, &tri.indexbuf, &e, &cs);
 	MAINCHECK
 
 	f = make_commandbuffers(my_device,my_pool,n_max_inflight,&my_commandbufs, &e, &cs);
@@ -283,7 +290,7 @@ int main() {
 	MAINCHECK
 
 	u64 i_frame = 0;
-	const u64 n_frameratecheck = 100;
+	constexpr u64 n_frameratecheck = 100;
 
 	clock_t last_time = clock();
 
@@ -331,7 +338,7 @@ int main() {
 		&fb_resized,
 		swapchain_extent,
 		my_renderpass,
-		my_pipeline,
+		tri,
 		my_commandbufs,
 		sem_imgready,
 		sem_rendfinish,
@@ -359,6 +366,7 @@ int main() {
 	cs_consume(&cs);
 	return 0;
 fail:
+	cs_consume(&swp_cs);
 	cs_consume(&cs);
 	return 1;
     
