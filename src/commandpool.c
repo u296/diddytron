@@ -51,7 +51,7 @@ bool make_commandbuffers(VkDevice dev, VkCommandPool pool, u32 n_max_inflight, V
 
 }
 
-bool recordcommandbuffer(VkExtent2D swapchainextent, VkFramebuffer fb, VkCommandBuffer cmdbuf, VkRenderPass renderpass, Renderable ren, struct Error* e_out) {
+bool recordcommandbuffer(VkExtent2D swapchainextent, VkFramebuffer fb, VkCommandBuffer cmdbuf, VkRenderPass renderpass, VkDescriptorSet desc_set, Renderable ren, struct Error* e_out) {
 
     VkCommandBufferBeginInfo cbbi = {};
     cbbi.sType = VK_STRUCTURE_TYPE_COMMAND_BUFFER_BEGIN_INFO;
@@ -98,6 +98,8 @@ bool recordcommandbuffer(VkExtent2D swapchainextent, VkFramebuffer fb, VkCommand
 
     vkCmdBindVertexBuffers(cmdbuf,0,1, vbufs, vbuf_offsets);
     vkCmdBindIndexBuffer(cmdbuf, ren.indexbuf.buf, 0, VK_INDEX_TYPE_UINT16);
+    vkCmdBindDescriptorSets(cmdbuf, VK_PIPELINE_BIND_POINT_GRAPHICS, ren.pipeline_layout, 0, 1, &desc_set, 0, NULL);
+
     vkCmdSetViewport(cmdbuf, 0, 1, &viewport);
     vkCmdSetScissor(cmdbuf, 0, 1, &scissor);
 

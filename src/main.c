@@ -11,14 +11,16 @@
 #include "commandpool.h"
 #include "common.h"
 #include "cleanupstack.h"
+#include "descriptors.h"
 #include "instance.h"
 #include "device.h"
+#include "linalg.h"
 #include "swapchain.h"
 #include "renderpass.h"
 #include "pipeline.h"
 #include "framebuffers.h"
 #include "sync.h"
-#include "vertexbuf.h"
+#include "buffers.h"
 #include "vulkan/vulkan_core.h" // having this here doesn't hurt and  prevents intellisense from adding it at the top which would break compilation
 
 
@@ -73,6 +75,9 @@ LoopStatus do_renderloop(
 	VkExtent2D swp_ext,
 	VkRenderPass rp,
 	Renderable tri,
+	Buffer* ubufs,
+	void** ubuf_mappings,
+	VkDescriptorSet* desc_sets,
 	VkCommandBuffer* cmdbufs,
 	VkSemaphore* sem_imgready,
 	VkSemaphore* sem_rendfinish,
@@ -107,7 +112,9 @@ LoopStatus do_renderloop(
 		vkResetFences(dev, 1,&fen_inflight[i_frame_modn]);
     	vkResetCommandBuffer(cmdbufs[i_frame_modn], 0);
 
-    	f = recordcommandbuffer(swp_ext, fbufs[i_image], cmdbufs[i_frame_modn], rp, tri, &e);
+		update_uniformbuffer(*i_frame, swp_ext, ubuf_mappings[i_frame_modn]);
+
+    	f = recordcommandbuffer(swp_ext, fbufs[i_image], cmdbufs[i_frame_modn], rp, desc_sets[i_frame_modn], tri, &e);
 		MAINCHECK
 		
 
@@ -185,7 +192,6 @@ void fb_resize_callback(GLFWwindow* wnd, int width, int height) {
 	*fbresize = true;
 }
 
-
 int main() {
 
 	struct CleanupStack cs = {};
@@ -213,12 +219,14 @@ int main() {
 	VkImage* swapchain_images;
 	VkImageView* my_imageviews;
 	VkRenderPass my_renderpass;
-	VkPipelineLayout my_pipelinelayout;
+	VkDescriptorSetLayout my_desc_set_layout;
 	Renderable tri;
+	Buffer* my_ubufs;
+	void** my_ubuf_mappings;
+	VkDescriptorPool my_dpool;
+	VkDescriptorSet* my_desc_sets;
 	VkFramebuffer* my_framebuffers;
 	VkCommandPool my_pool;
-	VkBuffer my_ibuf;
-	VkDeviceMemory my_ibuf_mem;
 	VkCommandBuffer* my_commandbufs;
 	VkSemaphore* sem_imgready;
 	VkSemaphore* sem_rendfinish;
@@ -268,7 +276,10 @@ int main() {
 	f = make_renderpass(my_device, swapchain_format, &my_renderpass, &e, &cs);
 	MAINCHECK
 
-	f = make_graphicspipeline(my_device, swapchain_extent,my_renderpass,&my_pipelinelayout,&tri.pipeline,&e,&cs);
+	f = make_descriptorsetlayout(my_device, &my_desc_set_layout, &cs);
+	MAINCHECK
+
+	f = make_graphicspipeline(my_device, swapchain_extent,my_renderpass,my_desc_set_layout, &tri.pipeline_layout,&tri.pipeline,&e,&cs);
 	MAINCHECK
 
 	f = make_framebuffers(my_device, swapchain_extent, n_swapchain_images, my_imageviews, my_renderpass, &my_framebuffers, &e,&swp_cs);
@@ -281,6 +292,18 @@ int main() {
 	MAINCHECK
 
 	f = make_indexbuffer(my_physdev, my_device, my_queues, my_pool, &tri.indexbuf, &e, &cs);
+	MAINCHECK
+
+	f = make_uniform_buffers(n_max_inflight, my_physdev, my_device, &my_ubufs, &my_ubuf_mappings, &e, &cs);
+	MAINCHECK
+
+	f = make_descriptor_pool(n_max_inflight,my_device,&my_dpool,&e,&cs);
+	MAINCHECK
+
+	f = make_descriptorsetlayout(my_device, &my_desc_set_layout, &cs);
+	MAINCHECK
+
+	f = make_descriptor_sets(n_max_inflight,my_device,my_dpool,my_ubufs,my_desc_set_layout,&my_desc_sets,&e,&cs);
 	MAINCHECK
 
 	f = make_commandbuffers(my_device,my_pool,n_max_inflight,&my_commandbufs, &e, &cs);
@@ -339,6 +362,9 @@ int main() {
 		swapchain_extent,
 		my_renderpass,
 		tri,
+		my_ubufs,
+		my_ubuf_mappings,
+		my_desc_sets,
 		my_commandbufs,
 		sem_imgready,
 		sem_rendfinish,

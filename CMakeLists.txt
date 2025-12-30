@@ -35,7 +35,9 @@ add_executable(diddytron
     src/framebuffers.c
     src/commandpool.c
     src/sync.c
-    src/vertexbuf.c
+    src/buffers.c
+    src/linalg.c
+    src/descriptors.c
     )
 
 set_target_properties(diddytron PROPERTIES

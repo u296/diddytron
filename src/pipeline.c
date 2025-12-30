@@ -4,7 +4,7 @@
 #include <string.h>
 #include "cleanupstack.h"
 #include "common.h"
-#include "vertexbuf.h"
+#include "buffers.h"
 
 void read_file(const char* filename, usize* bufsize, u8** buf) {
     
@@ -60,11 +60,11 @@ void destroy_pipeline(void* obj) {
     vkDestroyPipeline(p->dev, p->pipeline, NULL);
 }
 
-bool make_graphicspipeline(VkDevice dev, VkExtent2D swapchainextent, VkRenderPass renderpass, VkPipelineLayout* pipeline_layout, VkPipeline* pipeline, struct Error* e_out, CleanupStack*cs) {
+bool make_graphicspipeline(VkDevice dev, VkExtent2D swapchainextent, VkRenderPass renderpass, VkDescriptorSetLayout desc_set_layout, VkPipelineLayout* pipeline_layout, VkPipeline* pipeline, struct Error* e_out, CleanupStack*cs) {
 
     VkShaderModule vertexshader, fragshader;
 
-    VkResult r = make_shadermodule(dev, "/Users/todd/Code/diddytron/shaders/nonhardcode_vert.spv", &vertexshader);
+    VkResult r = make_shadermodule(dev, "/Users/todd/Code/diddytron/shaders/uniforms_vert.spv", &vertexshader);
     VERIFY("vert shader", r)
     
     r = make_shadermodule(dev, "/Users/todd/Code/diddytron/shaders/frag.spv", &fragshader);
@@ -160,6 +160,8 @@ bool make_graphicspipeline(VkDevice dev, VkExtent2D swapchainextent, VkRenderPas
 
     VkPipelineLayoutCreateInfo plci = {};
     plci.sType = VK_STRUCTURE_TYPE_PIPELINE_LAYOUT_CREATE_INFO;
+    plci.setLayoutCount = 1;
+    plci.pSetLayouts = &desc_set_layout;
 
     
     r = vkCreatePipelineLayout(dev, &plci, NULL, pipeline_layout);

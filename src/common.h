@@ -13,6 +13,9 @@ typedef int16_t i16;
 typedef uint8_t u8;
 typedef int8_t i8;
 
+typedef float f32;
+typedef double f64;
+
 typedef uintptr_t usize;
 
 #define CLAMP(a,min,max) (a < min ? min : (a > max ? max : a))
@@ -38,6 +41,7 @@ typedef struct Renderable {
 	Buffer vertexbuf;
     Buffer indexbuf;
 	VkPipeline pipeline;
+    VkPipelineLayout pipeline_layout;
 } Renderable;
 
 #endif
